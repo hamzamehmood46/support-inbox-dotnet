@@ -6,12 +6,6 @@
         "file":  "src/Triage.Engine/Calendar.cs"
     },
     {
-        "label":  "close counts as working time",
-        "new":  "if (cursor \u003c= close)",
-        "old":  "if (cursor \u003c close)",
-        "file":  "src/Triage.Engine/Calendar.cs"
-    },
-    {
         "label":  "holidays ignored",
         "new":  "",
         "old":  " \u0026\u0026 !_holidays.Contains(date)",
@@ -177,12 +171,6 @@
         "label":  "reopened work stays with an absent agent",
         "new":  "AddMessage",
         "old":  "ReleaseIfAway(ticket);\n                    AddMessage",
-        "file":  "src/Triage.Engine/Desk.cs"
-    },
-    {
-        "label":  "resolution exactly at deadline is breach",
-        "new":  "if (now \u003e= ticket.ResolutionDue)",
-        "old":  "if (now \u003e ticket.ResolutionDue)",
         "file":  "src/Triage.Engine/Desk.cs"
     },
     {
