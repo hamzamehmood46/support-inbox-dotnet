@@ -173,8 +173,8 @@ public class StatsTests
     public void The_average_first_response_is_measured_in_working_time()
     {
         var s = new Shop();
-        var a = s.New("A");
-        var b = s.New("B");
+        var a = s.New("Ticket A");
+        var b = s.New("Ticket B");
         s.Hours(2);
         s.Reply(a);
         s.Hours(1);

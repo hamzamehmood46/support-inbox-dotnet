@@ -59,14 +59,27 @@ public class ReplyTests
     [Fact]
     public void Replying_to_an_unassigned_ticket_takes_ownership_of_it()
     {
+        var full = new Shop(capacity: 1);
+        full.New("One");
+        full.New("Two");
+        var third = full.New("Three");
+        Assert.Null(third.AssigneeId);
+
+        var replied = full.Reply(third, full.Ben);
+
+        Assert.Equal(full.Ben.Id, replied.AssigneeId);
+    }
+
+    [Fact]
+    public void An_agent_who_is_away_does_not_take_ownership_by_replying()
+    {
         _s.Desk.SetAvailable(_s.Ana.Id, false);
         _s.Desk.SetAvailable(_s.Ben.Id, false);
         var t = _s.New();
-        Assert.Null(t.AssigneeId);
 
         var replied = _s.Reply(t, _s.Ben);
 
-        Assert.Equal(_s.Ben.Id, replied.AssigneeId);
+        Assert.Null(replied.AssigneeId);
     }
 
     [Fact]
@@ -404,8 +417,8 @@ public class MergeTests
     [Fact]
     public void Tags_are_combined_up_to_the_limit()
     {
-        var keep = _s.New("A", tags: ["a1", "a2", "a3", "a4", "a5", "shared"]);
-        var duplicate = _s.New("B", tags: ["b1", "b2", "b3", "b4", "b5", "shared"]);
+        var keep = _s.New("Ticket A", tags: ["a1", "a2", "a3", "a4", "a5", "shared"]);
+        var duplicate = _s.New("Ticket B", tags: ["b1", "b2", "b3", "b4", "b5", "shared"]);
 
         _s.Desk.Merge(duplicate.Id, keep.Id);
 
@@ -460,9 +473,9 @@ public class MergeTests
     [Fact]
     public void Only_tickets_from_the_same_person_can_be_merged_and_case_does_not_matter()
     {
-        var a = _s.New("A", "cara@example.com");
-        var b = _s.New("B", "CARA@example.com");
-        var other = _s.New("C", "dan@example.com");
+        var a = _s.New("Ticket A", "cara@example.com");
+        var b = _s.New("Ticket B", "CARA@example.com");
+        var other = _s.New("Ticket C", "dan@example.com");
 
         Assert.False(_s.Desk.Merge(other.Id, a.Id).Ok);
         Assert.True(_s.Desk.Merge(b.Id, a.Id).Ok);
@@ -471,7 +484,7 @@ public class MergeTests
     [Fact]
     public void A_ticket_cannot_be_merged_into_itself_or_into_something_that_does_not_exist()
     {
-        var a = _s.New("A");
+        var a = _s.New("Ticket A");
 
         Assert.False(_s.Desk.Merge(a.Id, a.Id).Ok);
         Assert.False(_s.Desk.Merge(a.Id, Guid.NewGuid()).Ok);
@@ -481,9 +494,9 @@ public class MergeTests
     [Fact]
     public void Closed_and_already_merged_tickets_cannot_be_merged()
     {
-        var a = _s.New("A");
-        var b = _s.New("B");
-        var c = _s.New("C");
+        var a = _s.New("Ticket A");
+        var b = _s.New("Ticket B");
+        var c = _s.New("Ticket C");
         _s.Desk.Merge(b.Id, a.Id);
 
         Assert.False(_s.Desk.Merge(b.Id, c.Id).Ok);

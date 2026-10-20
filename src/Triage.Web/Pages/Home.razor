@@ -1,0 +1,299 @@
+@page "/"
+@using System.Globalization
+@inject AppState S
+
+<PageTitle>Triage: a support inbox with SLA timers</PageTitle>
+
+@{
+    var stats = S.Desk.Stats();
+    var agents = S.Desk.Agents();
+    var names = agents.ToDictionary(a => a.Id, a => a.Name);
+    var list = S.Desk.Tickets(_status, null, null, null, _search);
+    var open = _id is { } id ? S.Desk.Ticket(id) : null;
+}
+
+<header class="top">
+    <div>
+        <h1>Triage</h1>
+        <p class="tag">A help desk where the clock is honest: working hours only, paused while you wait on the customer.</p>
+    </div>
+    <dl class="stats">
+        <div><dt>Active</dt><dd>@stats.Active</dd></div>
+        <div><dt>Unassigned</dt><dd>@stats.Unassigned</dd></div>
+        <div><dt>At risk</dt><dd>@stats.AtRisk</dd></div>
+        <div><dt>Breached</dt><dd class="@(stats.Breached > 0 ? "bad" : "")">@stats.Breached</dd></div>
+        <div><dt>Now</dt><dd>@S.Now.ToString("ddd HH:mm", CultureInfo.InvariantCulture)</dd></div>
+    </dl>
+</header>
+
+<main>
+    <section class="guide" aria-label="How to try it">
+        <h2>Try this (3 minutes)</h2>
+        <ol>
+            <li>The clock is <b>Tuesday 10:30</b>. Open the <b>outage</b> ticket: it was marked urgent automatically from its words and has a 1 hour reply target. Reply to it and watch the timer stop being a risk.</li>
+            <li>Press <b>+1 day</b> without replying to anything: tickets move from <b>ok</b> to <b>at risk</b> to <b>breached</b>, and breached ones are <b>escalated</b> to the top. Nights and weekends do not count.</li>
+            <li>Reply to a ticket and choose <b>Pending</b>: the resolution timer pauses. Use <b>Customer replies</b> to resume it, and note the deadline moved out by the time you waited.</li>
+            <li>Mark <b>Ben away</b> on the Team tab: his tickets go back to the queue and are shared out. Tickets with a tag go to the agent with that skill.</li>
+            <li>Leave a pending ticket for <b>a week</b> and it is solved automatically, then closed three days later.</li>
+        </ol>
+    </section>
+
+    @if (S.Message.Length > 0)
+    {
+        <div class="toast @(S.MessageOk ? "ok" : "bad")" role="status">@S.Message</div>
+    }
+
+    <section class="card">
+        <div class="actions wrap">
+            <button class="btn" @onclick="() => S.Wait(TimeSpan.FromHours(1))">+1 hour</button>
+            <button class="btn" @onclick="() => S.Wait(TimeSpan.FromHours(8))">+8 hours</button>
+            <button class="btn primary" @onclick="() => S.Wait(TimeSpan.FromHours(24))">+1 day</button>
+            <button class="btn" @onclick="() => S.Wait(TimeSpan.FromHours(24 * 7))">+1 week</button>
+            <button class="btn ghost" @onclick="Reset">Reset demo</button>
+        </div>
+        <label class="check"><input type="checkbox" checked="@S.AutoRun" @onchange="e => S.AutoRun = (bool)(e.Value ?? false)" /> Run automation every hour (escalate, auto-solve, auto-close, assign)</label>
+        <p class="hint">Working hours are 09:00 to 17:00 UTC, Monday to Friday. Time only moves when you press a button.</p>
+    </section>
+
+    <nav class="tabs" aria-label="Sections">
+        @foreach (var t in new[] { "Inbox", "New ticket", "Team" })
+        {
+            var name = t;
+            <button class="tab @(_tab == name ? "on" : "")" @onclick="() => _tab = name">@name</button>
+        }
+    </nav>
+
+    @if (_tab == "Inbox")
+    {
+        <section class="card">
+            <div class="selects">
+                <label>Status
+                    <select @onchange="e => _status = Enum.TryParse<Status>(e.Value?.ToString(), out var v) ? v : null">
+                        <option value="">All</option>
+                        @foreach (var st in Enum.GetValues<Status>()) { <option value="@st">@st</option> }
+                    </select>
+                </label>
+                <label>Search<input @bind="_search" @bind:event="oninput" placeholder="subject, person, words" /></label>
+            </div>
+            <div class="tablewrap">
+                <table>
+                    <thead><tr><th>Ticket</th><th>Subject</th><th>Status</th><th>First reply</th><th>Solve by</th><th>Owner</th></tr></thead>
+                    <tbody>
+                        @foreach (var t in list)
+                        {
+                            var tid = t.Id;
+                            var sla = S.Desk.Assess(t);
+                            <tr class="@(_id == tid ? "sel" : "")" @onclick="() => _id = tid" style="cursor:pointer">
+                                <td><b>@t.Key</b>@if (t.Escalated) { <span class="chip tone-final">Escalated</span> }</td>
+                                <td>@t.Subject<div class="hint">@t.Requester @(t.Priority >= Priority.High ? "· " + t.Priority : "")</div></td>
+                                <td><span class="chip @(t.IsActive ? "s-running" : "s-skipped")">@t.Status</span></td>
+                                <td><span class="chip @Cls(sla.FirstResponse)">@Label(sla.FirstResponse, sla.FirstResponseRemaining)</span></td>
+                                <td><span class="chip @Cls(sla.Resolution)">@Label(sla.Resolution, sla.ResolutionRemaining)</span></td>
+                                <td>@(t.AssigneeId is { } a ? names[a] : t.NeedsAgent ? "Unassigned" : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        @if (open is not null)
+        {
+            var sla = S.Desk.Assess(open);
+            <section class="card">
+                <h2>@open.Key: @open.Subject</h2>
+                <p class="hint">@open.Requester · @open.Priority · created @open.CreatedAt.ToString("ddd HH:mm", CultureInfo.InvariantCulture)@(open.Reopens > 0 ? $" · reopened {open.Reopens}x" : "")@(open.FollowUpOf is not null ? " · follow-up" : "")@(open.MergedInto is not null ? " · merged into another ticket" : "")</p>
+                <p>
+                    @foreach (var tag in open.Tags) { <span class="chip tone-friendly">@tag <a @onclick="() => RemoveTag(open.Id, tag)" style="cursor:pointer">x</a></span> }
+                    <input class="taginput" placeholder="add tag" @bind="_tag" /> <button class="btn small" @onclick="() => AddTag(open.Id)">Add</button>
+                </p>
+                <p class="hint">Reply by <span class="chip @Cls(sla.FirstResponse)">@Label(sla.FirstResponse, sla.FirstResponseRemaining)</span> Solve by <span class="chip @Cls(sla.Resolution)">@Label(sla.Resolution, sla.ResolutionRemaining)</span>@(open.PausedBusiness > TimeSpan.Zero ? $" · {(int)open.PausedBusiness.TotalHours}h of waiting not counted" : "")</p>
+                <div class="thread">
+                    @foreach (var m in open.Messages)
+                    {
+                        <div class="msg @m.Author.ToString().ToLowerInvariant()"><b>@m.By</b> <span class="hint">@m.At.ToString("ddd HH:mm", CultureInfo.InvariantCulture)@(m.Author == Author.Note ? " · internal note" : "")</span><div>@m.Text</div></div>
+                    }
+                </div>
+                @if (open.Status != Status.Closed)
+                {
+                    <div class="selects">
+                        <label>As<select @bind="S.AgentId">@foreach (var a in agents) { <option value="@a.Id">@a.Name</option> }</select></label>
+                        <label>Message<input @bind="_text" placeholder="Write a reply or a note" /></label>
+                        <label>Then<select @bind="_then"><option value="Open">Keep open</option><option value="Pending">Pending (wait on customer)</option><option value="Solved">Solved</option></select></label>
+                    </div>
+                    <div class="actions wrap">
+                        <button class="btn primary" @onclick="() => Send(open.Id, true)">Send reply</button>
+                        <button class="btn" @onclick="() => Send(open.Id, false)">Add internal note</button>
+                        <button class="btn" @onclick="() => CustomerWrites(open.Id)">Customer replies</button>
+                        @if (open.Status == Status.Solved) { <button class="btn" @onclick="() => Do(S.Desk.Reopen(open.Id))">Reopen</button> }
+                        else { <button class="btn" @onclick="() => Do(S.Desk.Solve(open.Id))">Solve</button> }
+                        <button class="btn ghost" @onclick="() => Do(S.Desk.SetPriority(open.Id, Priority.Urgent))">Make urgent</button>
+                    </div>
+                    <div class="selects">
+                        <label>Assign to<select @onchange="e => Assign(open.Id, e.Value?.ToString())"><option value="">Choose…</option>@foreach (var a in agents) { <option value="@a.Id">@a.Name@(a.Available ? "" : " (away)")</option> }<option value="none">Back to the queue</option></select></label>
+                        <label>Merge this into<select @onchange="e => MergeInto(open.Id, e.Value?.ToString())"><option value="">Choose…</option>@foreach (var o in S.Desk.Tickets().Where(x => x.Id != open.Id && x.Requester == open.Requester && x.Status != Status.Closed)) { <option value="@o.Id">@o.Key @o.Subject</option> }</select></label>
+                    </div>
+                }
+            </section>
+        }
+    }
+    else if (_tab == "New ticket")
+    {
+        <section class="card narrow">
+            <h2>New ticket</h2>
+            <div class="selects">
+                <label>From<input @bind="_from" /></label>
+                <label>Subject<input @bind="_subject" /></label>
+                <label>Message<input @bind="_body" /></label>
+                <label>Priority<select @bind="_priority">@foreach (var p in Enum.GetValues<Priority>()) { <option value="@p">@p</option> }</select></label>
+            </div>
+            <div class="actions"><button class="btn primary" @onclick="Create">Create ticket</button></div>
+            <p class="hint">Words like <i>refund</i>, <i>password</i> or <i>outage</i> add tags and a minimum priority by themselves. The ticket is assigned to the least busy agent with the right skill.</p>
+        </section>
+    }
+    else
+    {
+        <div class="two">
+            <section class="card">
+                <h2>Team</h2>
+                <div class="tablewrap">
+                    <table>
+                        <thead><tr><th>Agent</th><th>Skills</th><th>Open</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var a in agents)
+                            {
+                                var load = stats.Agents.First(x => x.AgentId == a.Id);
+                                var aid = a.Id;
+                                <tr>
+                                    <td><b>@a.Name</b></td>
+                                    <td>@(a.Skills.Count == 0 ? "generalist" : string.Join(", ", a.Skills))</td>
+                                    <td class="mono">@load.Open / @a.Capacity</td>
+                                    <td><button class="btn small @(a.Available ? "" : "primary")" @onclick="() => Away(aid, !a.Available)">@(a.Available ? "Set away" : "Back")</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            <section class="card">
+                <h2>Service levels</h2>
+                <div class="month"><span>Compliance</span><span class="bar big"><i style="width:@(stats.SlaCompliancePercent ?? 0)%"></i></span><span class="mono">@(stats.SlaCompliancePercent?.ToString("0.#", CultureInfo.InvariantCulture) ?? "-")%</span></div>
+                <div class="month"><span>Avg first reply</span><span></span><span class="mono">@(stats.AverageFirstResponse is { } avg ? $"{(int)avg.TotalHours}h {avg.Minutes}m" : "-")</span></div>
+                @foreach (var st in stats.ByStatus)
+                {
+                    <div class="month"><span>@st.Key</span><span></span><span class="mono">@st.Value</span></div>
+                }
+                <p class="hint">Compliance is the share of solved tickets solved inside their target, counted in working time.</p>
+            </section>
+        </div>
+    }
+</main>
+
+<footer class="foot">
+    <span>C# engine, tested with a simulated clock. The same code runs in your browser with Blazor WebAssembly.</span>
+    <a href="https://github.com/hamzamehmood46/support-inbox-dotnet">Source on GitHub</a>
+</footer>
+
+@code {
+    private string _tab = "Inbox";
+    private Guid? _id;
+    private Status? _status;
+    private string _search = "";
+    private string _text = "";
+    private string _then = "Open";
+    private string _tag = "";
+    private string _from = "pat@example.com";
+    private string _subject = "Question about my plan";
+    private string _body = "Can you tell me what is included?";
+    private Priority _priority = Priority.Normal;
+
+    private static string Cls(SlaState s) => s switch
+    {
+        SlaState.Breached => "s-deadlettered",
+        SlaState.AtRisk => "rs-queued",
+        SlaState.Met => "s-succeeded",
+        SlaState.Paused => "tone-friendly",
+        SlaState.NotApplicable => "s-skipped",
+        _ => "s-running",
+    };
+
+    private static string Label(SlaState s, TimeSpan? remaining) => s switch
+    {
+        SlaState.Met => "met",
+        SlaState.Paused => "paused",
+        SlaState.NotApplicable => "-",
+        _ => remaining is null ? s.ToString().ToLowerInvariant() : AppState.Fmt(remaining),
+    };
+
+    private void Do(Result r) => S.Say(r.Message, r.Ok);
+
+    private void Reset()
+    {
+        S.Reset();
+        _id = null;
+    }
+
+    private void Send(Guid id, bool isPublic)
+    {
+        Status? then = isPublic ? Enum.Parse<Status>(_then) : null;
+        var r = S.Desk.Reply(id, S.AgentId, _text, isPublic, then == Status.Open ? null : then);
+        S.Say(r.Message, r.Ok);
+        if (r.Ok)
+        {
+            _text = "";
+        }
+    }
+
+    private void CustomerWrites(Guid id)
+    {
+        var r = S.Desk.CustomerReply(id, "Thanks, any news on this?");
+        S.Say(r.Message, r.Ok);
+        if (r.Ok && r.Value is { } t)
+        {
+            _id = t.Id;
+        }
+    }
+
+    private void Assign(Guid id, string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return;
+        }
+
+        Do(S.Desk.Assign(id, value == "none" ? null : Guid.Parse(value)));
+    }
+
+    private void MergeInto(Guid id, string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return;
+        }
+
+        var target = Guid.Parse(value);
+        Do(S.Desk.Merge(id, target));
+        _id = target;
+    }
+
+    private void AddTag(Guid id)
+    {
+        Do(S.Desk.AddTag(id, _tag));
+        _tag = "";
+    }
+
+    private void RemoveTag(Guid id, string tag) => Do(S.Desk.RemoveTag(id, tag));
+
+    private void Away(Guid agent, bool available) => Do(S.Desk.SetAvailable(agent, available));
+
+    private void Create()
+    {
+        var r = S.Desk.Create(_subject, _from, _body, _priority);
+        S.Say(r.Message, r.Ok);
+        if (r.Ok)
+        {
+            _id = r.Value!.Id;
+            _tab = "Inbox";
+        }
+    }
+}
