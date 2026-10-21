@@ -44,7 +44,7 @@ The clock is injected, so every time rule is tested by moving a simulated clock 
 dotnet test
 ```
 
-236 tests, including:
+237 tests, including:
 
 - the calendar: every edge of the working day, weekends, holidays, custom hours, and `Add` and `Between` being exact inverses;
 - each target at its exact boundary (the minute before, the deadline itself, the minute after) for both clocks and all priorities;
@@ -53,7 +53,7 @@ dotnet test
 - the conversation rules, merging in every combination, follow-ups, and automation at its exact thresholds;
 - a randomized test: 400 random actions across six seeds, after which no open ticket is held by an absent agent, message numbers are contiguous, merged tickets point at real ones, and pending status always matches the pause.
 
-I also broke the rules on purpose to check the tests notice (deadline off by one in each direction, waiting time not credited, a note counting as a reply, round-robin removed, specialists taking any work, merging across people, and more). MUTATION_PLACEHOLDER
+I also broke the rules on purpose to check the tests notice (deadline off by one in each direction, waiting time not credited, a note counting as a reply, round-robin removed, specialists taking any work, merging across people, and more). 29 of 30 made tests fail, and one made the test run loop forever, which counts as noticed. The 30th (removing the round-robin tie-break) was not noticed until I added a test for it.
 
 ## Scope
 

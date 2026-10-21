@@ -15,6 +15,24 @@ public class AssignmentTests
     }
 
     [Fact]
+    public void When_loads_are_equal_whoever_was_given_work_longest_ago_goes_next()
+    {
+        var s = new Shop();
+        s.Desk.SetAvailable(s.Ana.Id, false);
+        var first = s.New("One");
+        s.Desk.SetAvailable(s.Ana.Id, true);
+        var second = s.New("Two");
+        Assert.Equal(s.Ben.Id, first.AssigneeId);
+        Assert.Equal(s.Ana.Id, second.AssigneeId);
+        s.Desk.Solve(first.Id);
+        s.Desk.Solve(second.Id);
+
+        var third = s.New("Three");
+
+        Assert.Equal(s.Ben.Id, third.AssigneeId);
+    }
+
+    [Fact]
     public void The_least_loaded_agent_gets_the_next_ticket_even_when_it_is_not_their_turn()
     {
         var s = new Shop();
