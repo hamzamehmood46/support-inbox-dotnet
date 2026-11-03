@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 @using System.Globalization
 @inject AppState S
 
@@ -85,7 +85,7 @@
                             var sla = S.Desk.Assess(t);
                             <tr class="@(_id == tid ? "sel" : "")" @onclick="() => _id = tid" style="cursor:pointer">
                                 <td><b>@t.Key</b>@if (t.Escalated) { <span class="chip tone-final">Escalated</span> }</td>
-                                <td>@t.Subject<div class="hint">@t.Requester @(t.Priority >= Priority.High ? "· " + t.Priority : "")</div></td>
+                                <td>@t.Subject<div class="hint">@t.Requester @(t.Priority >= Priority.High ? "Â· " + t.Priority : "")</div></td>
                                 <td><span class="chip @(t.IsActive ? "s-running" : "s-skipped")">@t.Status</span></td>
                                 <td><span class="chip @Cls(sla.FirstResponse)">@Label(sla.FirstResponse, sla.FirstResponseRemaining)</span></td>
                                 <td><span class="chip @Cls(sla.Resolution)">@Label(sla.Resolution, sla.ResolutionRemaining)</span></td>
@@ -102,18 +102,22 @@
             var sla = S.Desk.Assess(open);
             <section class="card">
                 <h2>@open.Key: @open.Subject</h2>
-                <p class="hint">@open.Requester · @open.Priority · created @open.CreatedAt.ToString("ddd HH:mm", CultureInfo.InvariantCulture)@(open.Reopens > 0 ? $" · reopened {open.Reopens}x" : "")@(open.FollowUpOf is not null ? " · follow-up" : "")@(open.MergedInto is not null ? " · merged into another ticket" : "")</p>
+                <p class="hint">@open.Requester Â· @open.Priority Â· created @open.CreatedAt.ToString("ddd HH:mm", CultureInfo.InvariantCulture)@(open.Reopens > 0 ? $" Â· reopened {open.Reopens}x" : "")@(open.FollowUpOf is not null ? " Â· follow-up" : "")@(open.MergedInto is not null ? " Â· merged into another ticket" : "")</p>
                 <p>
                     @foreach (var tag in open.Tags) { <span class="chip tone-friendly">@tag <a @onclick="() => RemoveTag(open.Id, tag)" style="cursor:pointer">x</a></span> }
                     <input class="taginput" placeholder="add tag" @bind="_tag" /> <button class="btn small" @onclick="() => AddTag(open.Id)">Add</button>
                 </p>
-                <p class="hint">Reply by <span class="chip @Cls(sla.FirstResponse)">@Label(sla.FirstResponse, sla.FirstResponseRemaining)</span> Solve by <span class="chip @Cls(sla.Resolution)">@Label(sla.Resolution, sla.ResolutionRemaining)</span>@(open.PausedBusiness > TimeSpan.Zero ? $" · {(int)open.PausedBusiness.TotalHours}h of waiting not counted" : "")</p>
+                <p class="hint">Reply by <span class="chip @Cls(sla.FirstResponse)">@Label(sla.FirstResponse, sla.FirstResponseRemaining)</span> Solve by <span class="chip @Cls(sla.Resolution)">@Label(sla.Resolution, sla.ResolutionRemaining)</span>@(open.PausedBusiness > TimeSpan.Zero ? $" Â· {(int)open.PausedBusiness.TotalHours}h of waiting not counted" : "")</p>
                 <div class="thread">
                     @foreach (var m in open.Messages)
                     {
-                        <div class="msg @m.Author.ToString().ToLowerInvariant()"><b>@m.By</b> <span class="hint">@m.At.ToString("ddd HH:mm", CultureInfo.InvariantCulture)@(m.Author == Author.Note ? " · internal note" : "")</span><div>@m.Text</div></div>
+                        <div class="msg @m.Author.ToString().ToLowerInvariant()"><b>@m.By</b> <span class="hint">@m.At.ToString("ddd HH:mm", CultureInfo.InvariantCulture)@(m.Author == Author.Note ? " Â· internal note" : "")</span><div>@m.Text</div></div>
                     }
                 </div>
+                @if (open.IsActive)
+                {
+                    <CopilotPanel TicketId="open.Id" OnChanged="@(() => { })" />
+                }
                 @if (open.Status != Status.Closed)
                 {
                     <div class="selects">
@@ -130,8 +134,8 @@
                         <button class="btn ghost" @onclick="() => Do(S.Desk.SetPriority(open.Id, Priority.Urgent))">Make urgent</button>
                     </div>
                     <div class="selects">
-                        <label>Assign to<select @onchange="e => Assign(open.Id, e.Value?.ToString())"><option value="">Choose…</option>@foreach (var a in agents) { <option value="@a.Id">@a.Name@(a.Available ? "" : " (away)")</option> }<option value="none">Back to the queue</option></select></label>
-                        <label>Merge this into<select @onchange="e => MergeInto(open.Id, e.Value?.ToString())"><option value="">Choose…</option>@foreach (var o in S.Desk.Tickets().Where(x => x.Id != open.Id && x.Requester == open.Requester && x.Status != Status.Closed)) { <option value="@o.Id">@o.Key @o.Subject</option> }</select></label>
+                        <label>Assign to<select @onchange="e => Assign(open.Id, e.Value?.ToString())"><option value="">Chooseâ€¦</option>@foreach (var a in agents) { <option value="@a.Id">@a.Name@(a.Available ? "" : " (away)")</option> }<option value="none">Back to the queue</option></select></label>
+                        <label>Merge this into<select @onchange="e => MergeInto(open.Id, e.Value?.ToString())"><option value="">Chooseâ€¦</option>@foreach (var o in S.Desk.Tickets().Where(x => x.Id != open.Id && x.Requester == open.Requester && x.Status != Status.Closed)) { <option value="@o.Id">@o.Key @o.Subject</option> }</select></label>
                     </div>
                 }
             </section>

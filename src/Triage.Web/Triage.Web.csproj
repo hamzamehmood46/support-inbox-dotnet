@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Triage.Engine\Triage.Engine.csproj" />
+    <ProjectReference Include="..\Triage.Copilot\Triage.Copilot.csproj" />
   </ItemGroup>
 
 </Project>

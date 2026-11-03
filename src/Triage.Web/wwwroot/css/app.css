@@ -171,3 +171,13 @@ tr.sel{background:rgba(255,255,255,.05)}
 .msg.agent{border-color:var(--accent)}
 .msg.note{border-style:dashed;color:var(--txt2)}
 .taginput{width:9rem}
+
+/* AI copilot panel */
+.copilot{border:1px dashed var(--line);border-radius:14px;padding:12px 14px;margin:12px 0;background:#121c27}
+.cp-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.cp-head h3{margin:0;font-size:1rem}
+.sugg{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:12px;background:var(--panel)}
+.sugg textarea{width:100%;box-sizing:border-box;background:#0e1620;color:inherit;font:inherit;border:1px solid var(--line);border-radius:10px;padding:.55rem .7rem;margin-top:8px;resize:vertical;min-height:80px}
+.proposal{margin:8px 0 0;font-weight:600}
+.hint.warn{color:var(--amber)}
+.cp-history{list-style:none;padding:0;margin:12px 0 0;display:grid;gap:4px;font-size:.88rem;color:var(--txt2)}
