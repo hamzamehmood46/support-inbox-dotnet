@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - run: dotnet test tests/Triage.Engine.Tests -c Release
+      - run: dotnet test Triage.sln -c Release
 
   deploy:
     needs: test

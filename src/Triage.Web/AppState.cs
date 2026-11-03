@@ -1,3 +1,4 @@
+﻿using Triage.Copilot;
 using Triage.Engine;
 
 namespace Triage.Web;
@@ -9,6 +10,9 @@ public sealed class AppState
 
     public SimulatedClock Clock { get; private set; } = null!;
     public Desk Desk { get; private set; } = null!;
+
+    /// <summary>Suggestions for the desk. The browser demo uses the deterministic fake model, so no key or server is involved.</summary>
+    public TriageCopilot Copilot { get; private set; } = null!;
     public bool AutoRun { get; set; } = true;
     public Guid? Selected { get; set; }
     public Guid AgentId { get; set; }
@@ -28,6 +32,7 @@ public sealed class AppState
         Desk.AddAgent("Cleo", ["billing", "account"], 4);
         AgentId = ana.Id;
         Seed();
+        Copilot = new TriageCopilot(Desk, new TriageAssistant(new FakeChatClient()), Clock);
         Selected = null;
         Message = "";
     }

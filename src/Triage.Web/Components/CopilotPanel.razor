@@ -1,0 +1,139 @@
+@using System.Globalization
+@using Triage.Copilot
+@inject AppState S
+
+@{
+    var all = S.Copilot.Suggestions(TicketId);
+    var pending = all.Where(s => s.Status == SuggestionStatus.Pending).OrderBy(s => s.CreatedAt).ToList();
+    var decided = all.Where(s => s.Status != SuggestionStatus.Pending).OrderByDescending(s => s.DecidedAt).Take(4).ToList();
+    var names = S.Desk.Agents().ToDictionary(a => a.Id, a => a.Name);
+    var approver = names.GetValueOrDefault(S.AgentId, "an agent");
+}
+
+<section class="copilot" aria-label="AI copilot">
+    <div class="cp-head">
+        <h3>AI copilot</h3>
+        <span class="chip tone-friendly">suggestions only</span>
+    </div>
+    <p class="hint">Nothing is sent or changed until you approve it. This demo runs a deterministic rule-based model in your browser; the same code can use a local Ollama model or a hosted one.</p>
+
+    <div class="actions wrap">
+        <button class="btn small" disabled="@_busy" @onclick="() => Ask(SuggestionKind.Classification)">Classify</button>
+        <button class="btn small" disabled="@_busy" @onclick="() => Ask(SuggestionKind.Summary)">Summarize</button>
+        <button class="btn small" disabled="@_busy" @onclick="() => Ask(SuggestionKind.Reply)">Draft reply</button>
+        <button class="btn small" disabled="@_busy" @onclick="() => Ask(SuggestionKind.Assignee)">Suggest assignee</button>
+    </div>
+
+    @foreach (var s in pending)
+    {
+        var sid = s.Id;
+        var editable = s.Kind is SuggestionKind.Reply or SuggestionKind.Summary;
+        <article class="sugg" aria-label="@Title(s.Kind) suggestion">
+            <div class="cp-head">
+                <b>@Title(s.Kind)</b>
+                <span class="chip @Level(s.Confidence)">@Percent(s.Confidence) confidence</span>
+            </div>
+            @if (editable)
+            {
+                <textarea rows="@(s.Kind == SuggestionKind.Reply ? 7 : 4)" aria-label="@Title(s.Kind) text, you can edit it" value="@Current(s)" @oninput="e => _edits[sid] = e.Value?.ToString() ?? string.Empty"></textarea>
+            }
+            else
+            {
+                <p class="proposal">@s.Text</p>
+            }
+            <p class="hint">Why: @s.Rationale</p>
+            @if (s.Confidence < 0.5)
+            {
+                <p class="hint warn">Low confidence. Check this one carefully before approving.</p>
+            }
+            <div class="actions">
+                <button class="btn small primary" @onclick="() => Approve(s)">@ApproveLabel(s.Kind, approver)</button>
+                <button class="btn small ghost" @onclick="() => Reject(sid)">Reject</button>
+            </div>
+        </article>
+    }
+
+    @if (decided.Count > 0)
+    {
+        <ul class="cp-history" aria-label="Earlier suggestions">
+            @foreach (var d in decided)
+            {
+                <li><span class="chip @(d.Status == SuggestionStatus.Approved ? "s-succeeded" : "s-skipped")">@d.Status</span> @Title(d.Kind) @(d.DecidedBy is { } by && names.TryGetValue(by, out var who) ? $"by {who}" : "") <span class="hint">@d.DecidedAt?.ToString("ddd HH:mm", CultureInfo.InvariantCulture)</span></li>
+            }
+        </ul>
+    }
+</section>
+
+@code {
+    private readonly Dictionary<Guid, string> _edits = [];
+    private bool _busy;
+
+    [Parameter, EditorRequired] public Guid TicketId { get; set; }
+
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private static string Title(SuggestionKind kind) => kind switch
+    {
+        SuggestionKind.Classification => "Priority and tags",
+        SuggestionKind.Summary => "Summary",
+        SuggestionKind.Reply => "Draft reply",
+        _ => "Assignee",
+    };
+
+    private static string ApproveLabel(SuggestionKind kind, string who) => kind switch
+    {
+        SuggestionKind.Reply => $"Approve and send as {who}",
+        SuggestionKind.Summary => "Save as internal note",
+        SuggestionKind.Classification => "Apply",
+        _ => "Assign",
+    };
+
+    private static string Percent(double c) => (c * 100).ToString("0", CultureInfo.InvariantCulture) + "%";
+
+    private static string Level(double c) => c >= 0.8 ? "s-succeeded" : c >= 0.5 ? "rs-queued" : "s-deadlettered";
+
+    private string Current(Suggestion s) => _edits.TryGetValue(s.Id, out var text) ? text : s.Text;
+
+    private async Task Ask(SuggestionKind kind)
+    {
+        _busy = true;
+        try
+        {
+            var r = kind switch
+            {
+                SuggestionKind.Classification => await S.Copilot.SuggestClassificationAsync(TicketId),
+                SuggestionKind.Summary => await S.Copilot.SuggestSummaryAsync(TicketId),
+                SuggestionKind.Reply => await S.Copilot.SuggestReplyAsync(TicketId),
+                _ => await S.Copilot.SuggestAssigneeAsync(TicketId),
+            };
+            S.Say(r.Message, r.Ok);
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task Approve(Suggestion s)
+    {
+        var edited = _edits.TryGetValue(s.Id, out var text) && text != s.Text ? text : null;
+        var r = S.Copilot.Approve(s.Id, S.AgentId, edited);
+        S.Say(r.Message, r.Ok);
+        if (r.Ok)
+        {
+            _edits.Remove(s.Id);
+        }
+
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task Reject(Guid id)
+    {
+        var r = S.Copilot.Reject(id, S.AgentId);
+        S.Say(r.Message, r.Ok);
+        _edits.Remove(id);
+        await OnChanged.InvokeAsync();
+    }
+}
